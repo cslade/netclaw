@@ -2,9 +2,39 @@
 
 A CCIE-level AI network engineering coworker. Built on [OpenClaw](https://github.com/openclaw/openclaw) with Anthropic Claude, 32 skills, and 15 MCP server backends for complete network automation with ITSM gating, source-of-truth reconciliation, immutable audit trails, and Slack-native operations.
 
+---
+
+## Quick Install
+
+```bash
+git clone https://github.com/automateyournetwork/netclaw.git
+cd netclaw
+./scripts/install.sh          # clones 15 MCP servers, deploys 32 skills, sets env vars
+nano testbed/testbed.yaml     # add your network devices
+openclaw onboard --install-daemon
+openclaw gateway              # foreground mode for WSL2
+openclaw chat --new           # talk to NetClaw
+```
+
+The installer handles everything: OpenClaw, 12 Python/Node MCP servers, 2 npx MCP servers, 32 skills, 14 environment variables, and verification of all components.
+
+**Optional credentials** (add to `~/.openclaw/.env` for full feature set):
+
+| Service | Environment Variables |
+|---------|----------------------|
+| NVD CVE | `NVD_API_KEY` |
+| NetBox | `NETBOX_URL`, `NETBOX_TOKEN` |
+| ServiceNow | `SERVICENOW_INSTANCE_URL`, `SERVICENOW_USERNAME`, `SERVICENOW_PASSWORD` |
+| Cisco ACI | `APIC_URL`, `APIC_USERNAME`, `APIC_PASSWORD` |
+| Cisco ISE | `ISE_BASE`, `ISE_USERNAME`, `ISE_PASSWORD` |
+| F5 BIG-IP | `F5_IP_ADDRESS`, `F5_AUTH_STRING` |
+| Catalyst Center | `CCC_HOST`, `CCC_USER`, `CCC_PWD` |
+
+---
+
 ## What It Does
 
-NetClaw is an autonomous network engineering agent powered by Claude Opus that can:
+NetClaw is an autonomous network engineering agent powered by Claude that can:
 
 - **Monitor** device health — CPU, memory, interfaces, hardware, NTP, logs — fleet-wide in parallel
 - **Troubleshoot** connectivity, routing adjacencies, performance, and flapping using OSI-layer methodology with multi-hop parallel state collection
@@ -24,6 +54,8 @@ NetClaw is an autonomous network engineering agent powered by Claude Opus that c
 - **Visualize** protocol hierarchies as interactive Markmap mind maps
 - **Reference** IETF RFCs and Wikipedia for standards-compliant configuration
 - **Audit** every action in an immutable Git-based trail (GAIT) — there is always an answer to "what did the AI do and why"
+
+---
 
 ## Architecture
 
@@ -53,61 +85,53 @@ Human (Slack / WebChat) --> NetClaw (CCIE Agent on OpenClaw)
                                 '     MCP: RFC Lookup      --> IETF standards reference
 ```
 
-## How Skills Work
+---
 
-NetClaw uses **OpenClaw Skills** — not `mcpServers` config — to give the agent its capabilities. Each skill is a `SKILL.md` file that teaches the agent how to call a specific tool via shell exec.
+## OpenClaw Workspace Files
 
-```
-User asks question via Slack/WebChat
-       |
-       v
-OpenClaw loads all 32 SKILL.md files into agent context
-       |
-       v
-Agent picks the right skill(s), constructs MCP call via mcp-call.py
-       |
-       v
-python3 mcp-call.py "<server-command>" <tool-name> '<arguments-json>'
-       |
-       v
-MCP server processes request, returns structured response
-       |
-       v
-Agent analyzes result using CCIE-level expertise from skills
-       |
-       v
-Records action in GAIT audit trail
-       |
-       v
-Responds to user with findings, recommendations, or diagrams
-```
+NetClaw ships with the full set of OpenClaw workspace markdown files. These are injected into the agent's system prompt at session start to define its identity, behavior, and operating procedures.
 
-Every tool call is a single shell command — no persistent server connections, no port management.
+| File | Purpose | Loaded When |
+|------|---------|-------------|
+| **[SOUL.md](SOUL.md)** | Core personality, CCIE expertise, 12 non-negotiable rules, protocol knowledge base | Every session |
+| **[AGENTS.md](AGENTS.md)** | Operating instructions: memory system, safety rules, change management workflow, Slack behavior, escalation matrix | Every session |
+| **[IDENTITY.md](IDENTITY.md)** | Name, creature type, vibe, emoji — NetClaw's identity card | Every session |
+| **[USER.md](USER.md)** | Your preferences, timezone, role, network details — personalization layer (edit this) | Every session |
+| **[TOOLS.md](TOOLS.md)** | Local infrastructure notes: device IPs, SSH hosts, Slack channels, site info (edit this) | Every session |
+| **[HEARTBEAT.md](HEARTBEAT.md)** | Periodic health checks: device reachability, OSPF/BGP state, CPU/memory, syslog scan | Every heartbeat cycle |
+
+**How they work:** OpenClaw reads these files at session start and injects them under "Project Context" in the system prompt. Each file is capped at 20,000 characters. Sub-agents only receive AGENTS.md and TOOLS.md.
+
+**What to customize:** Edit `USER.md` with your name, timezone, and preferences. Edit `TOOLS.md` with your device IPs, Slack channels, and site information. The rest define NetClaw's behavior and expertise — modify only if you want to change how the agent operates.
+
+---
 
 ## MCP Servers (15)
 
-| MCP Server | Repository | Function |
-|---|---|---|
-| pyATS | [automateyournetwork/pyATS_MCP](https://github.com/automateyournetwork/pyATS_MCP) | Device automation, Genie parsers, config push, dynamic test execution |
-| F5 BIG-IP | [czirakim/F5.MCP.server](https://github.com/czirakim/F5.MCP.server) | iControl REST API — virtuals, pools, iRules, profiles |
-| Catalyst Center | [richbibby/catalyst-center-mcp](https://github.com/richbibby/catalyst-center-mcp) | DNA Center API — devices, clients, sites, interfaces |
-| NetBox | [netboxlabs/netbox-mcp-server](https://github.com/netboxlabs/netbox-mcp-server) | Read-only DCIM/IPAM source of truth |
-| ServiceNow | [echelon-ai-labs/servicenow-mcp](https://github.com/echelon-ai-labs/servicenow-mcp) | Incidents, change requests, CMDB |
-| GAIT | [automateyournetwork/gait_mcp](https://github.com/automateyournetwork/gait_mcp) | Git-based AI tracking and audit |
-| Cisco ACI | [automateyournetwork/ACI_MCP](https://github.com/automateyournetwork/ACI_MCP) | APIC interaction, policy management, fabric health |
-| Cisco ISE | [automateyournetwork/ISE_MCP](https://github.com/automateyournetwork/ISE_MCP) | Identity policy, posture, TrustSec, endpoint control |
-| NVD CVE | [marcoeg/mcp-nvd](https://github.com/marcoeg/mcp-nvd) | NIST NVD vulnerability database with CVSS scoring |
-| Subnet Calculator | [automateyournetwork/GeminiCLI_SubnetCalculator_Extension](https://github.com/automateyournetwork/GeminiCLI_SubnetCalculator_Extension) | IPv4 + IPv6 CIDR subnet calculator |
-| Wikipedia | [automateyournetwork/Wikipedia_MCP](https://github.com/automateyournetwork/Wikipedia_MCP) | Standards and technology context |
-| Markmap | [automateyournetwork/markmap_mcp](https://github.com/automateyournetwork/markmap_mcp) | Hierarchical mind map generation |
-| Draw.io | [@drawio/mcp](https://github.com/jgraph/drawio-mcp) (npx) | Network topology diagram generation |
-| RFC Lookup | [@mjpitz/mcp-rfc](https://github.com/mjpitz/mcp-rfc) (npx) | IETF RFC search and retrieval |
+| # | MCP Server | Repository | Transport | Function |
+|---|------------|------------|-----------|----------|
+| 1 | pyATS | [automateyournetwork/pyATS_MCP](https://github.com/automateyournetwork/pyATS_MCP) | stdio (Python) | Device CLI, Genie parsers, config push, dynamic test execution |
+| 2 | F5 BIG-IP | [czirakim/F5.MCP.server](https://github.com/czirakim/F5.MCP.server) | stdio (Python) | iControl REST API — virtuals, pools, iRules, profiles, stats |
+| 3 | Catalyst Center | [richbibby/catalyst-center-mcp](https://github.com/richbibby/catalyst-center-mcp) | stdio (Python) | DNA-C API — devices, clients, sites, interfaces |
+| 4 | Cisco ACI | [automateyournetwork/ACI_MCP](https://github.com/automateyournetwork/ACI_MCP) | stdio (Python) | APIC interaction, policy management, fabric health |
+| 5 | Cisco ISE | [automateyournetwork/ISE_MCP](https://github.com/automateyournetwork/ISE_MCP) | stdio (Python) | Identity policy, posture, TrustSec, endpoint control |
+| 6 | NetBox | [netboxlabs/netbox-mcp-server](https://github.com/netboxlabs/netbox-mcp-server) | stdio (Python) | Read-only DCIM/IPAM source of truth |
+| 7 | ServiceNow | [echelon-ai-labs/servicenow-mcp](https://github.com/echelon-ai-labs/servicenow-mcp) | stdio (Python) | Incidents, change requests, CMDB |
+| 8 | NVD CVE | [marcoeg/mcp-nvd](https://github.com/marcoeg/mcp-nvd) | stdio (Python) | NIST NVD vulnerability database with CVSS scoring |
+| 9 | Subnet Calculator | [automateyournetwork/GeminiCLI_SubnetCalculator_Extension](https://github.com/automateyournetwork/GeminiCLI_SubnetCalculator_Extension) | stdio (Python) | IPv4 + IPv6 CIDR subnet calculator |
+| 10 | GAIT | [automateyournetwork/gait_mcp](https://github.com/automateyournetwork/gait_mcp) | stdio (Python) | Git-based AI tracking and audit |
+| 11 | Wikipedia | [automateyournetwork/Wikipedia_MCP](https://github.com/automateyournetwork/Wikipedia_MCP) | stdio (Python) | Standards and technology context |
+| 12 | Markmap | [automateyournetwork/markmap_mcp](https://github.com/automateyournetwork/markmap_mcp) | stdio (Node) | Hierarchical mind map generation |
+| 13 | Draw.io | [@drawio/mcp](https://github.com/jgraph/drawio-mcp) | npx | Network topology diagram generation |
+| 14 | RFC Lookup | [@mjpitz/mcp-rfc](https://github.com/mjpitz/mcp-rfc) | npx | IETF RFC search and retrieval |
 
-## Skills (32 Total)
+All MCP servers communicate via stdio (JSON-RPC 2.0) through `scripts/mcp-call.py`. No persistent connections, no port management.
+
+---
+
+## Skills (32)
 
 ### pyATS Device Skills (9)
-
-These skills give NetClaw deep Cisco IOS-XE/NX-OS expertise through the [pyATS MCP server](https://github.com/automateyournetwork/pyATS_MCP):
 
 | Skill | What the Agent Knows |
 |-------|---------------------|
@@ -169,9 +193,11 @@ These skills give NetClaw deep Cisco IOS-XE/NX-OS expertise through the [pyATS M
 | **slack-incident-workflow** | Full incident lifecycle in Slack: declaration, triage, automated investigation, status updates, resolution, post-incident review |
 | **slack-user-context** | User-aware interactions: DND-respecting escalation, timezone-aware scheduling, role-based response depth, shift handoff summaries |
 
-### Skill Anatomy
+---
 
-Each `SKILL.md` has YAML frontmatter and markdown instructions:
+## How Skills Work
+
+Each skill is a `SKILL.md` file with YAML frontmatter and markdown instructions. OpenClaw loads them into the agent context at session start.
 
 ```markdown
 ---
@@ -189,6 +215,14 @@ metadata:
 ```
 
 The `metadata.openclaw.requires` block declares binary and environment variable dependencies. The markdown body is the agent's playbook.
+
+Every tool call goes through `scripts/mcp-call.py`, which handles MCP JSON-RPC protocol: initialize, notify, tool call, terminate. No persistent server connections, no port management.
+
+```
+python3 mcp-call.py "<server-command>" <tool-name> '<arguments-json>'
+```
+
+---
 
 ## Standard Workflows
 
@@ -264,56 +298,77 @@ pyats-topology
 --> GAIT commit
 ```
 
-## Prerequisites
-
-- Node.js >= 18 (>= 22 recommended for OpenClaw)
-- Python 3.x with pip3
-- git
-- Network devices accessible via SSH (for pyATS)
-- Anthropic API key
-
-Optional (for full feature set):
-- NetBox instance with API token
-- ServiceNow instance with credentials
-- Cisco APIC with credentials (for ACI skills)
-- Cisco ISE with ERS API enabled (for ISE skills)
-- NVD API key (for CVE scanning — free from https://nvd.nist.gov/developers/request-an-api-key)
-- F5 BIG-IP management access with iControl REST enabled
-- Cisco Catalyst Center (DNA Center) with API credentials
-- Slack workspace with NetClaw bot installed (for Slack skills)
-
-## Quick Start
-
-```bash
-# 1. Clone NetClaw
-git clone https://github.com/automateyournetwork/netclaw.git
-cd netclaw
-
-# 2. Run the installer (installs OpenClaw, clones 15 MCP servers, builds tools, deploys all 32 skills)
-./scripts/install.sh
-
-# 3. Configure your devices
-nano testbed/testbed.yaml
-
-# 4. Onboard OpenClaw (if first time)
-openclaw onboard --install-daemon
-
-# 5. Start the gateway (foreground mode for WSL2)
-openclaw gateway
-
-# 6. Chat with NetClaw
-openclaw chat --new
+### F5 Load Balancer Health
 ```
+f5-health-check
+--> Virtual server stats (connections, throughput)
+--> Pool member status (up/down/disabled)
+--> Log analysis for errors
+--> Severity assessment
+--> GAIT audit
+```
+
+### Catalyst Center Client Investigation
+```
+catc-client-ops + catc-troubleshoot
+--> Client lookup by MAC address
+--> Connection details: SSID, band, AP, VLAN, health score
+--> pyATS follow-up for switch-port state
+--> GAIT audit
+```
+
+---
+
+## Safety
+
+NetClaw enforces non-negotiable constraints at every layer:
+
+**Never guesses device state** — runs a show command or queries NetBox first, always.
+
+**Never touches a device without a baseline** — pre-change state is captured and committed to GAIT before any config push.
+
+**Never skips the Change Request** — ServiceNow CR must exist and be in `Approved` state before execution (except Emergency changes, which require immediate human notification).
+
+**Never runs destructive commands** — `write erase`, `erase`, `reload`, `delete`, `format` are refused at the MCP server level.
+
+**Never auto-quarantines an endpoint** — ISE endpoint group modification always requires explicit human confirmation.
+
+**Never writes to NetBox** — NetBox is read-only. Discrepancies are ticketed in ServiceNow, not auto-corrected.
+
+**Always verifies after changes** — if post-change verification fails, the CR is not closed and the human is notified.
+
+**Always commits to GAIT** — every session ends with `gait_log` so the human can see the full audit trail.
+
+---
+
+## GAIT Audit Trail
+
+Every NetClaw session produces an immutable Git-based record of:
+- What was asked
+- What data was collected (and from where)
+- What was analyzed (and what conclusions were reached)
+- What was changed (and on what device)
+- What the verification result was
+- What ServiceNow tickets were created or updated
+
+This is not optional. It is how NetClaw earns trust in production environments.
+
+---
 
 ## Project Structure
 
 ```
 netclaw/
-├── SOUL.md                               # System prompt (v2 — load into your agent)
+├── SOUL.md                               # Agent personality, expertise, rules
+├── AGENTS.md                             # Operating instructions, memory, safety
+├── IDENTITY.md                           # Name, creature type, vibe, emoji
+├── USER.md                               # Your preferences (edit this)
+├── TOOLS.md                              # Local infrastructure notes (edit this)
+├── HEARTBEAT.md                          # Periodic health check checklist
 ├── MISSION01.md                          # Completed — core pyATS + 11 skills
-├── MISSION02.md                          # Completed — full platform with 32 skills
+├── MISSION02.md                          # Completed — full platform, 32 skills
 ├── workspace/
-│   └── skills/                           # Skill definitions (source of truth)
+│   └── skills/                           # 32 skill definitions (source of truth)
 │       ├── pyats-network/                # Core device automation (8 MCP tools)
 │       ├── pyats-health-check/           # Health + NetBox cross-ref + pCall
 │       ├── pyats-routing/                # OSPF, BGP, EIGRP, IS-IS analysis
@@ -383,7 +438,12 @@ netclaw/
 
 | Location | Purpose |
 |----------|---------|
-| `SOUL.md` | Agent system prompt. Defines personality, rules, and workflow orchestration |
+| `SOUL.md` | Agent system prompt. Defines personality, CCIE expertise, rules, and workflow orchestration |
+| `AGENTS.md` | Operating instructions. Memory system, safety rules, change management, Slack behavior, escalation |
+| `IDENTITY.md` | Agent identity card. Name, creature type, vibe, emoji |
+| `USER.md` | About you. Preferences, timezone, role, network details. **Edit this.** |
+| `TOOLS.md` | Local infrastructure. Device IPs, SSH hosts, Slack channels. **Edit this.** |
+| `HEARTBEAT.md` | Periodic checks. Device reachability, OSPF/BGP state, CPU/memory, syslog. |
 | `workspace/skills/` | Skill source files. `install.sh` copies these to `~/.openclaw/workspace/skills/` |
 | `testbed/testbed.yaml` | pyATS device inventory. Referenced by `PYATS_TESTBED_PATH` env var |
 | `config/openclaw.json` | Model config template. Sets primary/fallback model only — no MCP config |
@@ -391,27 +451,31 @@ netclaw/
 | `scripts/mcp-call.py` | Handles MCP JSON-RPC protocol: initialize, notify, tool call, terminate |
 | `scripts/gait-stdio.py` | Wraps GAIT MCP server for stdio mode (default is SSE) |
 
+---
+
 ## What install.sh Does
 
 1. **Checks prerequisites** — Node.js >= 18, Python 3, pip3, git, npx
 2. **Installs OpenClaw** — `npm install -g openclaw@latest`
-3. **Clones pyATS MCP** — `git clone` + `pip3 install -r requirements.txt`
-4. **Clones Markmap MCP** — `git clone` + `npm install` + `npm run build`
-5. **Clones GAIT MCP** — `git clone` + `pip3 install gait-ai fastmcp`
-6. **Clones NetBox MCP** — `git clone` + `pip3 install` dependencies
-7. **Clones ServiceNow MCP** — `git clone` + `pip3 install` dependencies
-8. **Clones ACI MCP** — `git clone` + `pip3 install` dependencies
-9. **Clones ISE MCP** — `git clone` + `pip3 install` dependencies
-10. **Clones Wikipedia MCP** — `git clone` + `pip3 install` dependencies
-11. **Caches npx packages** — `npm cache add` for Draw.io and RFC servers
+3. **Creates mcp-servers/** — directory for all cloned backends
+4. **Clones pyATS MCP** — `git clone` + `pip3 install -r requirements.txt`
+5. **Clones Markmap MCP** — `git clone` + `npm install` + `npm run build`
+6. **Clones GAIT MCP** — `git clone` + `pip3 install gait-ai fastmcp`
+7. **Clones NetBox MCP** — `git clone` + `pip3 install` dependencies
+8. **Clones ServiceNow MCP** — `git clone` + `pip3 install` dependencies
+9. **Clones ACI MCP** — `git clone` + `pip3 install` dependencies
+10. **Clones ISE MCP** — `git clone` + `pip3 install` dependencies
+11. **Clones Wikipedia MCP** — `git clone` + `pip3 install` dependencies
 12. **Clones NVD CVE MCP** — `git clone` + `pip3 install -e .`
 13. **Clones Subnet Calculator MCP** — `git clone` (enhanced with IPv6 support)
 14. **Clones F5 BIG-IP MCP** — `git clone` + `pip3 install` dependencies
 15. **Clones Catalyst Center MCP** — `git clone` + `pip3 install` dependencies
-16. **Deploys all 32 skills** — Copies `workspace/skills/*` to `~/.openclaw/workspace/skills/`
-17. **Sets environment** — Writes 14 env vars to `~/.openclaw/.env` (testbed path, all MCP script paths)
+16. **Caches npx packages** — `npm cache add` for Draw.io and RFC servers
+17. **Deploys skills + workspace files** — Copies 32 skills and 6 MD files to `~/.openclaw/workspace/`
 18. **Verifies installation** — Checks 14 critical files exist (all MCP server scripts + core scripts)
 19. **Prints summary** — Lists all 15 MCP servers by category and all 32 skills by domain
+
+---
 
 ## Testbed Configuration
 
@@ -437,37 +501,27 @@ devices:
 
 The `%ENV{NETCLAW_PASSWORD}` syntax pulls credentials from environment variables so they stay out of version control.
 
-## Safety
+---
 
-NetClaw enforces non-negotiable constraints at every layer:
+## Prerequisites
 
-**Never guesses device state** — runs a show command or queries NetBox first, always.
+- Node.js >= 18 (>= 22 recommended for OpenClaw)
+- Python 3.x with pip3
+- git
+- Network devices accessible via SSH (for pyATS)
+- Anthropic API key
 
-**Never touches a device without a baseline** — pre-change state is captured and committed to GAIT before any config push.
+Optional (for full feature set):
+- NetBox instance with API token
+- ServiceNow instance with credentials
+- Cisco APIC with credentials (for ACI skills)
+- Cisco ISE with ERS API enabled (for ISE skills)
+- NVD API key (free from https://nvd.nist.gov/developers/request-an-api-key)
+- F5 BIG-IP management access with iControl REST enabled
+- Cisco Catalyst Center (DNA Center) with API credentials
+- Slack workspace with NetClaw bot installed (for Slack skills)
 
-**Never skips the Change Request** — ServiceNow CR must exist and be in `Approved` state before execution (except Emergency changes, which require immediate human notification).
-
-**Never runs destructive commands** — `write erase`, `erase`, `reload`, `delete`, `format` are refused at the MCP server level.
-
-**Never auto-quarantines an endpoint** — ISE endpoint group modification always requires explicit human confirmation.
-
-**Never writes to NetBox** — NetBox is read-only. Discrepancies are ticketed in ServiceNow, not auto-corrected.
-
-**Always verifies after changes** — if post-change verification fails, the CR is not closed and the human is notified.
-
-**Always commits to GAIT** — every session ends with `gait_log` so the human can see the full audit trail.
-
-## GAIT Audit Trail
-
-Every NetClaw session produces an immutable Git-based record of:
-- What was asked
-- What data was collected (and from where)
-- What was analyzed (and what conclusions were reached)
-- What was changed (and on what device)
-- What the verification result was
-- What ServiceNow tickets were created or updated
-
-This is not optional. It is how NetClaw earns trust in production environments.
+---
 
 ## Example Conversations
 
@@ -495,9 +549,6 @@ Ask NetClaw anything you'd ask a senior network engineer:
 "Investigate endpoint 00:11:22:33:44:55"
 --> ise-incident-response: auth history, posture, profile --> human decision point
 
-"Show me the OSPF topology as a mind map"
---> pyats-routing (OSPF neighbors/database) + markmap-viz (generate mind map)
-
 "Check the F5 load balancer health"
 --> f5-health-check: virtual server stats, pool member status, active connections
 
@@ -507,15 +558,20 @@ Ask NetClaw anything you'd ask a senior network engineer:
 "Calculate a /22 for the 10.50.0.0 network"
 --> subnet-calculator: VLSM breakdown, usable hosts, wildcard mask, CIDR notation
 
+"Show me the OSPF topology as a mind map"
+--> pyats-routing (OSPF neighbors/database) + markmap-viz (generate mind map)
+
 "What does RFC 4271 say about BGP hold timers?"
 --> rfc-lookup: fetch RFC 4271, extract relevant section
 ```
 
 See `examples/` for detailed workflow walkthroughs.
 
+---
+
 ## Missions
 
 | Mission | Status | Summary |
 |---|---|---|
 | MISSION01 | Complete | Core pyATS agent, 7 skills, Markmap, Draw.io, RFC, NVD CVE, SOUL v1 |
-| MISSION02 | Complete | Full platform — 15 MCP servers (pyATS, F5, CatC, NetBox, ServiceNow, GAIT, ACI, ISE, NVD, Subnet Calc, Wikipedia, Markmap, Draw.io, RFC), 32 skills (9 pyATS, 7 domain, 3 F5, 3 CatC, 6 reference/utility, 4 Slack), SOUL v2 |
+| MISSION02 | Complete | Full platform — 15 MCP servers, 32 skills (9 pyATS, 7 domain, 3 F5, 3 CatC, 6 utility, 4 Slack), 6 workspace files, SOUL v2 |

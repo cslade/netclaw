@@ -385,6 +385,15 @@ if [ -d "$OPENCLAW_DIR" ]; then
     cp -r "$NETCLAW_DIR/workspace/skills/"* "$OPENCLAW_DIR/workspace/skills/"
     log_info "Deployed skills to $OPENCLAW_DIR/workspace/skills/"
 
+    # Deploy OpenClaw workspace MD files (SOUL, AGENTS, IDENTITY, USER, TOOLS, HEARTBEAT)
+    for mdfile in SOUL.md AGENTS.md IDENTITY.md USER.md TOOLS.md HEARTBEAT.md; do
+        if [ -f "$NETCLAW_DIR/$mdfile" ]; then
+            cp "$NETCLAW_DIR/$mdfile" "$OPENCLAW_DIR/workspace/$mdfile"
+            log_info "Deployed $mdfile to workspace"
+        fi
+    done
+    log_info "Deployed workspace files to $OPENCLAW_DIR/workspace/"
+
     # Set ALL environment variables in OpenClaw .env
     OPENCLAW_ENV="$OPENCLAW_DIR/.env"
     [ -f "$OPENCLAW_ENV" ] || touch "$OPENCLAW_ENV"
